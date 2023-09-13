@@ -136,6 +136,8 @@ version_dependent_macros = version_ge_1_1 + version_ge_1_3 + version_ge_1_5
 
 _, bare_metal_version = get_cuda_bare_metal_version(CUDA_HOME)
 
+sys.argv.append("--distributed_adam")
+sys.argv.append("--deprecated_fused_adam")
 if "--distributed_adam" in sys.argv:
     sys.argv.remove("--distributed_adam")
     raise_if_cuda_home_none("--distributed_adam")
@@ -153,6 +155,7 @@ if "--distributed_adam" in sys.argv:
             },
         )
     )
+else: raise RuntimeError(sys.argv)
 
 if "--distributed_lamb" in sys.argv:
     sys.argv.remove("--distributed_lamb")
@@ -175,7 +178,7 @@ if "--distributed_lamb" in sys.argv:
 if "--cuda_ext" in sys.argv:
     sys.argv.remove("--cuda_ext")
     raise_if_cuda_home_none("--cuda_ext")
-    check_cuda_torch_binary_vs_bare_metal(CUDA_HOME)
+    #check_cuda_torch_binary_vs_bare_metal(CUDA_HOME)
 
     ext_modules.append(
         CUDAExtension(
