@@ -1989,15 +1989,14 @@ class DistributedFusedAdam(torch.optim.Optimizer):
                 (default: 2). Only 2-norm is currently supported.
             force (bool, optional): ignore cached value and force norm
                 computation (default: False).
-            tp_group (torch.distributed.ProcessGroup, optional):
-                the tensor parallel group containing ranks participating with
-                separate instances of DistributedFusedAdam
-                (default: No tensor parallel group)
+            tp_group (torch.distributed.ProcessGroup, optional): Tensor parallel group. 
+                If specified, gradients are reduced across this group in addition to distributed_process_group.
+                Useful for setups with both data and tensor parallelism.
 
         """
         if force or self._grad_norm is None:
             norm_type = float(norm_type)
-            assert norm_type == 2.0
+            assert norm_type == 2.0 # not much of a choice here
             grad_norm_sq = self._local_grad_norm(
                 parameters=parameters,
                 norm_type=norm_type,
@@ -2040,15 +2039,14 @@ class DistributedFusedAdam(torch.optim.Optimizer):
                 in optimizer (default: all parameters in optimizer).
             norm_type (float, optional): type of the used
                 p-norm (default: 2)
-            tp_group (torch.distributed.ProcessGroup, optional):
-                the tensor parallel group containing ranks participating with
-                separate instances of DistributedFusedAdam
-                (default: No tensor parallel group)
-
+            tp_group (torch.distributed.ProcessGroup, optional): Tensor parallel group. 
+                If specified, gradients are reduced across this group in addition to distributed_process_group.
+                Useful for setups with both data and tensor parallelism.
+                
         """
         assert max_norm > 0
         total_norm = self.grad_norm(parameters=parameters, norm_type=norm_type, tp_group=tp_group)
-        clip_coef = max_norm / (total_norm + 1e-6)
+        clip_coef = max_norm / (total_norm + 1e-6) # prevent div-by-zero? (smallest fp16 value ~= 6.1e-5)
         clip_coef_clamped = torch.clamp(clip_coef, max=1.0)
         self._grad_scale *= clip_coef_clamped
         return total_norm
