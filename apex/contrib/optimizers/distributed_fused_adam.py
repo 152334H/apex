@@ -1972,6 +1972,7 @@ class DistributedFusedAdam(torch.optim.Optimizer):
         parameters: Optional[Iterable[torch.nn.Parameter]] = None,
         norm_type: float = 2.0,
         force: bool = False,
+        tp_group: Optional[torch.distributed.ProcessGroup] = None,
     ) -> torch.Tensor:
         """Gradient norm of parameters in optimizer
 
@@ -1988,6 +1989,10 @@ class DistributedFusedAdam(torch.optim.Optimizer):
                 (default: 2). Only 2-norm is currently supported.
             force (bool, optional): ignore cached value and force norm
                 computation (default: False).
+            tp_group (torch.distributed.ProcessGroup, optional):
+                the tensor parallel group containing ranks participating with
+                separate instances of DistributedFusedAdam
+                (default: No tensor parallel group)
 
         """
         if force or self._grad_norm is None:
@@ -2002,6 +2007,12 @@ class DistributedFusedAdam(torch.optim.Optimizer):
                 op=torch.distributed.ReduceOp.SUM,
                 group=self.distributed_process_group,
             )
+            if tp_group: # not implemented particularly efficiently
+                torch.distributed.all_reduce(
+                    grad_norm_sq,
+                    op=torch.distributed.ReduceOp.SUM,
+                    group=tp_group,
+                )
             self._grad_norm = grad_norm_sq.sqrt()
         grad_norm = self._grad_norm * self._grad_scale
         return grad_norm.detach()
@@ -2011,6 +2022,7 @@ class DistributedFusedAdam(torch.optim.Optimizer):
         max_norm: float,
         parameters: Optional[Iterable[torch.nn.Parameter]] = None,
         norm_type: float = 2.0,
+        tp_group: Optional[torch.distributed.ProcessGroup] = None,
     ) -> torch.Tensor:
         """Clips gradient norm of parameters in optimizer
 
@@ -2028,10 +2040,14 @@ class DistributedFusedAdam(torch.optim.Optimizer):
                 in optimizer (default: all parameters in optimizer).
             norm_type (float, optional): type of the used
                 p-norm (default: 2)
+            tp_group (torch.distributed.ProcessGroup, optional):
+                the tensor parallel group containing ranks participating with
+                separate instances of DistributedFusedAdam
+                (default: No tensor parallel group)
 
         """
         assert max_norm > 0
-        total_norm = self.grad_norm(parameters=parameters, norm_type=norm_type)
+        total_norm = self.grad_norm(parameters=parameters, norm_type=norm_type, tp_group=tp_group)
         clip_coef = max_norm / (total_norm + 1e-6)
         clip_coef_clamped = torch.clamp(clip_coef, max=1.0)
         self._grad_scale *= clip_coef_clamped
